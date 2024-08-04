@@ -4,6 +4,8 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\Api\V1\TaskController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\AmazonController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -37,3 +39,5 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
         Route::delete('/{task}', [TaskController::class, 'destroy']);
     });
 });
+
+Route::get('/search', [AmazonController::class, 'search']);
