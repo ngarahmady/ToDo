@@ -40,4 +40,4 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     });
 });
 
-Route::get('/search', [AmazonController::class, 'search']);
+Route::get('/amazon/search', [AmazonController::class, 'scrapeAmazon']);

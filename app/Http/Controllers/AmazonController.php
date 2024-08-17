@@ -2,50 +2,63 @@
 
 namespace App\Http\Controllers;
 
+use Goutte\Client;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 
 class AmazonController extends Controller
 {
-
-    public function search(Request $request)
+    public function scrapeAmazon(Request $request)
     {
-        $priceMin = $request->query('price_min');
-        $priceMax = $request->query('price_max');
-        $reviewMin = $request->query('review_min');
-        $reviewMax = $request->query('review_max');
+        $client = new Client();
+        $keywords = urlencode($request->input('keywords'));
+        $minPrice = $request->input('min_price', 0);
+        $maxPrice = $request->input('max_price', PHP_INT_MAX);
+        $minReview = $request->input('min_review', 0);
+        $maxReview = $request->input('max_review', PHP_INT_MAX);
 
-        // Prepare the data for sending to ChatGPT
-        $query = "Find Amazon links for items priced between $priceMin and $priceMax, with reviews between $reviewMin and $reviewMax.";
+        $url = "https://www.amazon.com/s?k=" . $keywords;
 
-        // Log the query for debugging
+        // ارسال درخواست به URL
+        $crawler = $client->request('GET', $url);
 
-        $response = Http::withHeaders([
-            'Authorization' => 'Bearer ' . config('services.chatgpt.key'),
-        ])->withOptions([
-                    'verify' => false, // Disable SSL verification, recommended only for temporary use
-                ])->post('https://api.openai.com/v1/engines/davinci-codex/completions', [
-                    'prompt' => $query,
-                    'max_tokens' => 100,
-                ]);
+        // استخراج لینک محصولات و اعمال فیلترها
+        $products = $crawler->filter('.s-result-item')->each(function ($node) use ($minPrice, $maxPrice, $minReview, $maxReview) {
+            $baseUrl = "https://www.amazon.com";
+            $titleNode = $node->filter('h2 a');
+            $priceNode = $node->filter('.a-price-whole');
+            $reviewNode = $node->filter('.a-icon-alt');
 
-        // Check if the response is successful
-        if ($response->successful()) {
-            // Log the raw response for debugging
-            dd($response->json());
-
-            $responseBody = $response->json();
-
-            if (isset($responseBody['choices']) && count($responseBody['choices']) > 0) {
-                $links = trim($responseBody['choices'][0]['text']);
-                return response()->json(['links' => $links]);
-            } else {
-                return response()->json(['error' => 'No links found in the response from ChatGPT.'], 500);
+            if ($titleNode->count() == 0 || $priceNode->count() == 0 || $reviewNode->count() == 0) {
+                return null; // اگر هر یک از این عناصر وجود نداشت، null برگردان
             }
-        } else {
-            // Log the error response for debugging
-            return response()->json(['error' => 'Failed to retrieve response from ChatGPT.'], 500);
-        }
-    }
 
+            $relativeUrl = $titleNode->attr('href');
+            $fullUrl = $baseUrl . $relativeUrl;
+            $title = $titleNode->text();
+
+            // استخراج قیمت
+            $price = floatval(str_replace(',', '', $priceNode->text()));
+
+            // استخراج تعداد نظرات
+            $reviewText = $reviewNode->text();
+            $reviews = floatval(substr($reviewText, 0, 3));
+
+            // اعمال فیلترهای قیمت و نظرات
+            if ($price >= $minPrice && $price <= $maxPrice && $reviews >= $minReview && $reviews <= $maxReview) {
+                return [
+                    'title' => $title,
+                    'link' => $fullUrl,
+                    'price' => $price,
+                    'reviews' => $reviews,
+                ];
+            }
+
+            return null; // اگر محصول شرایط فیلترها را نداشت، null برگردان
+        });
+
+        // حذف محصولات null
+        $filteredProducts = array_filter($products);
+
+        return response()->json($filteredProducts);
+    }
 }

@@ -34,5 +34,11 @@ return [
     'chatgpt' => [
         'key' => env('CHATGPT_API_KEY'),
     ],
+    'amazon' => [
+        'access_key_id' => env('AWS_ACCESS_KEY_ID'),
+        'secret_access_key' => env('AWS_SECRET_ACCESS_KEY'),
+        'partner_tag' => env('PARTNER_TAG'),
+    ],
+
 
 ];
